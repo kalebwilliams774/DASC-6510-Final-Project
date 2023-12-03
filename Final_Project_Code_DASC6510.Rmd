@@ -3,7 +3,7 @@ title: "Final Project DASC 6510"
 author: "Kaleb Williams, Caleb Vonmaydell"
 date: "Fall 2023"
 output: html_document:
-  keep_md: yes
+  keep_md: TRUE
 ---
 
 ```{r setup-chunk, include=FALSE}
@@ -151,7 +151,7 @@ BTC_vol <- BTC_price |>
   rename("Volatility"="Close")
 ```
 
-```{r}
+```{r closing-price-plot}
 #Plotting closing prices of WMT, GOOG, GM, BTC-USD on single graph
 
 legend_colours = c('Walmart' = 'black','Google'='blue','General Motors'='red','Bitcoin'='green')
@@ -170,7 +170,7 @@ ggplot() +
 
 #Transformation of the closing price for bitcoin was applied so that all stocks and bitcoin were on th same scale, as price of bitcoin is orders of magnitude larger than the closing stock prices. Transformation applied was Close = Close/500.
 ```
-```{r}
+```{r closing-price-volatility-plot}
 #Plotting volatility of closing prices of WMT, GOOG, GM, BTC-USD on single graph
 
 legend_colours = c('Walmart' = 'black','Google'='blue','General Motors'='red','Bitcoin'='green')
@@ -190,11 +190,11 @@ ggplot() +
 ```{r}
 #From the above plot we can see an overall climb in closing prices
 
-#We wish to check Bitcoin (BTC-USD) against three other major stocks: Walmart (WMT), Google (GOOG) and General Motors (GM) against trying times in the world to check its performance. 
+#We wish to check Bitcoin (BTC-USD) against three other major stocks: Walmart (WMT), Google (GOOG) and General Motors (GM) against trying times in the world to check its performance. Unfortunately Bitcoin data is only available for post 2012, general motors data is only available post 2009. So they will be left out during the analysis of the housing market collapse.
 
 #First we will investigate the performance and volatility of the stocks during the COVID-19 pandemic
 
-#COVID-19 began in the USA in the month of January 2020 https://www.nm.org/healthbeat/medical-advances/new-therapies-and-drug-trials/covid-19-pandemic-timeline#:~:text=Though%20initially%20discovered%20in%20Wuhan,nation%20of%20the%20outbreak%20abroad.
+#COVID-19 began on 2020-02-15 as reported by the CDC .
 
 #COVID-19 ended in the USA in the month of May 2023 https://fortune.com/well/2023/01/31/will-covid-vaccines-still-be-free-us-united-states-omicron-paxlovid-pandemic-end-tests/
 
@@ -227,14 +227,14 @@ BTC_COVID_VOL <- BTC_vol |>
   filter(Date >= '2020-02-15', Date <= '2023-05-31')
 ```
 
-```{r}
+```{r closing-price-plot-covid}
 #Plotting COVID-19 timeline closing prices of WMT, GOOG, GM, BTC-USD on single graph
 
 legend_colours = c('Walmart' = 'black','Google'='blue','General Motors'='red','Bitcoin'='green')
 
 ggplot() + 
   geom_line(data = WMT_COVID, aes(x=Date, y=Close,colour = 'Walmart')) + 
-  geom_line(data = GOOG_COVID, aes(x=Date, y=Close,colour = 'Google')) +       geom_line(data=GM_COVID, aes(x=Date,y=Close,colour='General Motors')) +
+  geom_line(data = GOOG_COVID, aes(x=Date, y=Close,colour = 'Google')) +    geom_line(data=GM_COVID, aes(x=Date,y=Close,colour='General Motors')) +
   geom_line(data=BTC_COVID, aes(x=Date,y=Close/500,colour='Bitcoin')) +
   labs(
     y = 'Stock Closing Price ($) During COVID-19',
@@ -247,7 +247,7 @@ ggplot() +
 #Transformation of the closing price for bitcoin was applied so that all stocks and bitcoin were on th same scale, as price of bitcoin is orders of magnitude larger than the closing stock prices. Transformation applied was Close = Close/500.
 ```
 
-```{r}
+```{r closing-price-volatility-covid}
 #There seems to be a significant jump in the three stocks between 2021 and half way through 2022. Then everything begins to drop again. Huge jump in closing prices for the stocks and bitcoin mid pandemic.
 
 #Now we investigate the volatility during the COVID-19 pandemic
@@ -269,95 +269,99 @@ ggplot() +
   theme_bw()
 ```
 ```{r}
-#Large spikes in the volatility between 2021 and mid 2022 as seen on the closing price graph.
+#Now to forecast the data using exponential smoothing from fpp3 package. We will forecast for the next year and compare to the true volatility for each stock.
 
-#Now we will fit some models and forecast them to see their accuracy in predicting the outcomes of the stocks and their volatility during the COVID-19 pandemic.
+fit_exp_WMT <- WMT_COVID_VOL |>
+  model(
+    ets = ETS(Volatility)
+  )
 
-WMT_ARIMA_COVID <- WMT_COVID |>
-  model(ARIMA(Close))
+fit_exp_GOOG <- GOOG_COVID_VOL |>
+  model(
+    ets = ETS(Volatility)
+  )
 
-GOOG_ARIMA_COVID <- GOOG_COVID |>
-  model(ARIMA(Close))
+fit_exp_GM <- GM_COVID_VOL |>
+  model(
+    ets = ETS(Volatility)
+  )
 
-GM_ARIMA_COVID <- GM_COVID |>
-  model(ARIMA(Close))
 
-BTC_ARIMA_COVID <- BTC_COVID |>
-  model(ARIMA(Close))
-
-WMT_ARIMA_COVID
-GOOG_ARIMA_COVID
-GM_ARIMA_COVID
-BTC_ARIMA_COVID
-```
-```{r}
-#The best fit ARIMA models are:
-#-WMT: ARIMA(2,1,2)
-#-GOOG: ARIMA(0,1,1)
-#-GM: ARIMA(0,1,0)
-#-BTC: ARIMA(0,1,0); Same as general motors.
+fit_exp_BTC <- BTC_COVID_VOL |>
+  model(
+    ets = ETS(Volatility)
+  )
 ```
 
 ```{r}
-#Investigating the housing market collapse of 2008 for the closing price of WMT, GOOG and GM.
+#Summaries of the exponential smoothing models
 
-#Creating tsibbles for closing price of stock during housing market collapse og 2008
-
-WMT_house <- WMT_price |>
-  filter(Date >= '2007-01-01', Date <= '2014-12-31')
-
-GOOG_house <- GOOG_price |>
-  filter(Date >= '2007-01-01', Date <= '2014-12-31')
-
-GM_house <- GM_price |>
-  filter(Date >= '2007-01-01', Date <= '2014-12-31')
-
-#Creating tsibbles for volatility in closing price of stocks during housing market collapse of 2008 until end of 2014
-
-WMT_house_vol <- WMT_vol |>
-  filter(Date >= '2007-01-01', Date <= '2014-12-31')
-
-GOOG_house_vol <- GOOG_vol |>
-  filter(Date >= '2007-01-01',Date <='2014-12-31')
-
-GM_house_vol <- GM_vol |>
-  filter(Date >= '2007-01-01',Date <='2014-12-31')
+fit_exp_WMT |>
+  report()
 ```
 
 ```{r}
-#Plots of WMT and GOOG closing price during 2008 housing crisis until the end of 2014
+fit_exp_GOOG |>
+  report()
+```
 
-legend_colours = c('Walmart' = 'black','Google'='blue')
+```{r}
+fit_exp_GM |>
+  report()
+```
 
-ggplot() + 
-  geom_line(data = WMT_house, aes(x=Date, y=Close,colour = 'Walmart')) + 
-  geom_line(data = GOOG_house, aes(x=Date, y=Close,colour = 'Google')) +  
+```{r}
+fc_exp_BTC |>
+  report()
+```
+```{r}
+#Calculating one year ahead forecasts
+
+fc_exp_WMT <- fit_exp_WMT |>
+  forecast(h=365)
+
+fc_exp_GOOG <- fit_exp_GOOG |>
+  forecast(h=365)
+
+fc_exp_GM <- fit_exp_GM |>
+  forecast(h=365)
+
+fc_exp_BTC <- fit_exp_BTC |>
+  forecast(h=365)
+```
+
+```{r WMT-COVID-Forecast}
+fc_exp_WMT |>
+    autoplot(WMT_vol) + 
   labs(
-    y = 'Stock Closing Price ($) During 2008 Housing Crisis',
-    x = 'Date',
-    colour = 'Stocks'
-    ) +
-  scale_color_manual(values = legend_colours) +
-  theme_bw()
+    y = 'WMT Volatility',
+    x ='Days'
+  )
 ```
-```{r}
-#Plots of stocks closing price volatility during 2008 (beginning 0f 2007) housing crisis up till current date.
 
-legend_colours = c('Walmart' = 'black','Google'='blue')
-
-ggplot() + 
-  geom_line(data = WMT_house_vol, aes(x=Date, y=Volatility,colour = 'Walmart')) + 
-  geom_line(data = GOOG_house_vol, aes(x=Date, y=Volatility,colour = 'Google'))+
+```{r GOOG-COVID-Forecast}
+fc_exp_GOOG |>
+    autoplot(GOOG_vol) + 
   labs(
-    y = 'Stock Closing Price Volatility ($) During 2008 Housing Crisis',
-    x = 'Date',
-    colour = 'Stocks'
-    ) +
-  scale_color_manual(values = legend_colours) +
-  theme_bw()
+    y = 'GOOG Volatility',
+    x ='Days'
+  )
 ```
 
-```{r}
-#Both GOOG and WMT exhibit higher volatility during the 2008 housing market collapse that begins to taper off as we approach the end of 2014 with next to no volatility in the stock price. With GOOG exhibiting much higher volatility throughout.
+```{r GM-COVID-Forecast}
+fc_exp_GM |>
+    autoplot(GM_vol) + 
+  labs(
+    y = 'GM Volatility',
+    x ='Days'
+  )
+```
 
+```{r BTC-COVID-Forecast}
+fc_exp_BTC |>
+    autoplot(BTC_vol) + 
+  labs(
+    y = 'BTC Volatility',
+    x ='Days'
+  )
 ```
