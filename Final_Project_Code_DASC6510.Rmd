@@ -1,0 +1,333 @@
+---
+title: "Final Project DASC 6510"
+author: "Kaleb Williams, Caleb Vonmaydell"
+date: "Fall 2023"
+output: html_document
+---
+
+```{r,warning=FALSE,message='FALSE'}
+#Importing possible necessary libraries
+library(quantmod)
+library(fpp3)
+library(tidyverse)
+library(prophet)
+library(fable.prophet)
+```
+
+```{r}
+#Getting Walmart (WMT) stock data from 2009-01-01 to 2023-10-31
+
+start.date = '2009-01-01'
+end.date = '2023-10-31'
+
+getSymbols("WMT",src="yahoo",from=start.date, to=end.date)
+```
+```{r}
+WMT_stock = zoo::fortify.zoo(WMT)
+
+#Rename date variable
+WMT_price <- WMT_stock |>
+  rename(c("Date" = "Index", "Close" = "WMT.Close"))
+
+#Create tissble object
+WMT_price <- as_tsibble(WMT_price, index = Date) # create tsibble object
+
+#Re-index based on trading days due to the missing days in stock data
+WMT_price <- WMT_price |>
+  mutate(day = row_number()) |>
+  update_tsibble(index = day, regular = TRUE)
+```
+
+```{r}
+#Getting Bitcoin (BTC-USD) price data from 2009-01-01 to 2023-10-31
+
+start.date = '2009-01-01'
+end.date = '2023-10-31'
+
+getSymbols("BTC-USD",src="yahoo",from=start.date, to=end.date)
+```
+```{r}
+BTC_price = zoo::fortify.zoo(`BTC-USD`)
+
+#Rename date variable
+BTC_price <- BTC_price |>
+  rename(c("Date" = "Index", "Close" = "BTC-USD.Close"))
+
+#Create tissble object
+BTC_price <- as_tsibble(BTC_price, index = Date) # create tsibble object
+
+#Re-index based on trading days due to the missing days in stock data
+BTC_price <- BTC_price |>
+  mutate(day = row_number()) |>
+  update_tsibble(index = day, regular = TRUE)
+```
+
+```{r}
+#Getting Google stock data from 2009-01-01 to 2023-10-31
+
+getSymbols("GOOG",src="yahoo",from=start.date, to=end.date)
+```
+```{r}
+GOOG_stock = zoo::fortify.zoo(GOOG)
+
+#Rename date variable
+GOOG_price <- GOOG_stock |>
+  rename(c("Date" = "Index", "Close" = "GOOG.Close"))
+
+#Create tisbble object
+GOOG_price <- as_tsibble(GOOG_price, index = Date) 
+
+#Re-index based on trading days due to the missing days in stock data
+GOOG_price <- GOOG_price |>
+  mutate(day = row_number()) |>
+    update_tsibble(index = day, regular = TRUE)
+```
+
+
+```{r}
+#Getting General Motors (GM) stock data from 2009-01-01 to 2023-10-31
+
+getSymbols("GM",src="yahoo",from=start.date, to=end.date)
+```
+
+```{r}
+GM_stock = zoo::fortify.zoo(GM)
+
+#Rename date variable
+GM_price <- GM_stock |>
+  rename(c("Date" = "Index", "Close" = "GM.Close"))
+
+#Create tisbble object
+GM_price <- as_tsibble(GM_price, index = Date) 
+
+#Re-index based on trading days due to the missing days in stock data
+GM_price <- GM_price |>
+  mutate(day = row_number()) |>
+    update_tsibble(index = day, regular = TRUE)
+```
+
+```{r}
+#Plotting all closing price data for WMT, GOOG, GM and BTC
+
+WMT_price |>
+  autoplot(Close) + labs(
+    y = "Walmart (WMT) Daily Closing Price ($)",
+    x = "Days"
+  )
+
+GOOG_price |>
+  autoplot(Close) + labs (
+    y = "Google (GOOG) Daily Closing Price ($)",
+    x = "Days"
+  )
+
+GM_price |>
+  autoplot(Close) + labs(
+    y = "General Motors (GM) Daily Closing Price ($)",
+    x = "Days"
+  )
+
+BTC_price|>
+  autoplot(Close) + labs (
+    y = "Bitcoin (BTC-USD) Daily Closing Price ($)",
+    x = "Days"
+  )
+```
+
+We will use the following volatility measure for all stock and bitcoin prices
+
+\begin{align}
+  v = |\sqrt{v}-\sqrt{\hat{v}}|.
+\end{align}
+
+```{r}
+#Volatility function as defined above.
+
+vol <- function(x){
+  v=abs(sqrt(x)-sqrt(mean(x)))
+  return(v)
+}
+```
+
+```{r}
+#Calculating volatility for WMT, GOOG, GM and BTC.
+
+WMT_vol <- WMT_price |>
+  mutate(Close = vol(Close)) |>
+  rename("Volatility"="Close")
+
+GOOG_vol <- GOOG_price |>
+  mutate(Close = vol(Close))|>
+  rename("Volatility"="Close")
+
+GM_vol <- GM_price |>
+  mutate(Close = vol(Close))|>
+  rename("Volatility"="Close")
+
+BTC_vol <- BTC_price |>
+  mutate(Close = vol(Close))|>
+  rename("Volatility"="Close")
+```
+
+```{r}
+#Plotting closing prices of WMT, GOOG, GM, BTC-USD on single graph
+
+legend_colours = c('Walmart' = 'black','Google'='blue','General Motors'='red','Bitcoin'='green')
+
+ggplot() + 
+  geom_line(data = WMT_price, aes(x=Date, y=Close,colour = 'Walmart')) + 
+  geom_line(data = GOOG_price, aes(x=Date, y=Close,colour = 'Google')) +       geom_line(data=GM_price, aes(x=Date,y=Close,colour='General Motors')) +
+  geom_line(data=BTC_price, aes(x=Date,y=Close/500,colour='Bitcoin')) +
+  labs(
+    y = 'Stock Closing Price ($)',
+    x = 'Date',
+    colour = 'Stocks'
+    ) +
+  scale_color_manual(values = legend_colours) +
+  theme_bw()
+
+#Transformation of the closing price for bitcoin was applied so that all stocks and bitcoin were on th same scale, as price of bitcoin is orders of magnitude larger than the closing stock prices. Transformation applied was Close = Close/500.
+```
+```{r}
+#Plotting volatility of closing prices of WMT, GOOG, GM, BTC-USD on single graph
+
+legend_colours = c('Walmart' = 'black','Google'='blue','General Motors'='red','Bitcoin'='green')
+
+ggplot() + 
+  geom_line(data = WMT_vol, aes(x=Date, y=Volatility,colour = 'Walmart')) + 
+  geom_line(data = GOOG_vol, aes(x=Date, y=Volatility,colour = 'Google')) +       geom_line(data=GM_vol, aes(x=Date,y=Volatility,colour='General Motors')) +
+  geom_line(data=BTC_vol, aes(x=Date,y=Volatility/10,colour='Bitcoin')) +
+  labs(
+    y = 'Volatility of Closing Price ($)',
+    x = 'Date',
+    colour = 'Stocks'
+    ) +
+  scale_color_manual(values = legend_colours) +
+  theme_bw()
+
+#Transformation of the volatility closing price for bitcoin was applied so that all stocks and bitcoin were on th same scale, as price of bitcoin is orders of magnitude larger than the closing stock prices. Transformation applied was Volatility = Volatility.
+```
+```{r}
+#From the above plot we can see an overall climb in closing prices
+
+#We wish to check Bitcoin (BTC-USD) against three other major stocks: Walmart (WMT), Google (GOOG) and General Motors (GM) against trying times in the world to check its performance. 
+
+#First we will investigate the performance and volatility of the stocks during the COVID-19 pandemic
+
+#COVID-19 began in the USA in the month of January 2020 https://www.nm.org/healthbeat/medical-advances/new-therapies-and-drug-trials/covid-19-pandemic-timeline#:~:text=Though%20initially%20discovered%20in%20Wuhan,nation%20of%20the%20outbreak%20abroad.
+
+#COVID-19 ended in the USA in the month of May 2023 https://fortune.com/well/2023/01/31/will-covid-vaccines-still-be-free-us-united-states-omicron-paxlovid-pandemic-end-tests/
+
+#Filtering closing price by COVID-19 pandemic dates
+
+WMT_COVID <- WMT_price |>
+  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+
+GOOG_COVID <- GOOG_price |>
+  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+
+GM_COVID <- GM_price |>
+  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+
+BTC_COVID <- BTC_price |>
+  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+
+#Filtering volatility of closing price by COVID-19 pandemic dates
+
+WMT_COVID_VOL <- WMT_vol |>
+  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+
+GOOG_COVID_VOL<- GOOG_vol |>
+  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+
+GM_COVID_VOL <- GM_vol |>
+  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+
+BTC_COVID_VOL <- BTC_vol |>
+  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+```
+
+```{r}
+#Plotting COVID-19 timeline closing prices of WMT, GOOG, GM, BTC-USD on single graph
+
+legend_colours = c('Walmart' = 'black','Google'='blue','General Motors'='red','Bitcoin'='green')
+
+ggplot() + 
+  geom_line(data = WMT_COVID, aes(x=Date, y=Close,colour = 'Walmart')) + 
+  geom_line(data = GOOG_COVID, aes(x=Date, y=Close,colour = 'Google')) +       geom_line(data=GM_COVID, aes(x=Date,y=Close,colour='General Motors')) +
+  geom_line(data=BTC_COVID, aes(x=Date,y=Close/500,colour='Bitcoin')) +
+  labs(
+    y = 'Stock Closing Price ($) During COVID-19',
+    x = 'Date',
+    colour = 'Stocks'
+    ) +
+  scale_color_manual(values = legend_colours) +
+  theme_bw()
+
+#Transformation of the closing price for bitcoin was applied so that all stocks and bitcoin were on th same scale, as price of bitcoin is orders of magnitude larger than the closing stock prices. Transformation applied was Close = Close/500.
+```
+
+```{r}
+#There seems to be a significant jump in the three stocks between 2021 and half way through 2022. Then everything begins to drop again. Huge jump in closing prices for the stocks and bitcoin mid pandemic.
+
+#Now we investigate the volatility during the COVID-19 pandemic
+
+#Plotting COVID-19 timeline closing prices of WMT, GOOG, GM, BTC-USD on single graph
+
+legend_colours = c('Walmart' = 'black','Google'='blue','General Motors'='red','Bitcoin'='green')
+
+ggplot() + 
+  geom_line(data = WMT_COVID_VOL, aes(x=Date, y=Volatility,colour = 'Walmart')) + 
+  geom_line(data = GOOG_COVID_VOL, aes(x=Date, y=Volatility,colour = 'Google')) +       geom_line(data=GM_COVID_VOL, aes(x=Date,y=Volatility,colour='General Motors')) +
+  geom_line(data=BTC_COVID_VOL, aes(x=Date,y=Volatility/10,colour='Bitcoin')) +
+  labs(
+    y = 'Stock Closing Price Volatility ($) During COVID-19',
+    x = 'Date',
+    colour = 'Stocks'
+    ) +
+  scale_color_manual(values = legend_colours) +
+  theme_bw()
+
+#Transformation of the volatility of the closing price for bitcoin was applied so that all stocks and bitcoin were on th same scale, as price of bitcoin is orders of magnitude larger than the closing stock prices. Transformation applied was Volatility = Volatility/10.
+```
+```{r}
+#Large spikes in the volatility between 2021 and mid 2022 as seen on the closing price graph.
+
+#Now we will fit some models and forecast them to see their accuracy in predicting the outcomes of the stocks and their volatility during the COVID-19 pandemic.
+
+WMT_ARIMA_COVID <- WMT_COVID |>
+  model(ARIMA(Close))
+
+GOOG_ARIMA_COVID <- GOOG_COVID |>
+  model(ARIMA(Close))
+
+GM_ARIMA_COVID <- GM_COVID |>
+  model(ARIMA(Close))
+
+BTC_ARIMA_COVID <- BTC_COVID |>
+  model(ARIMA(Close))
+
+WMT_ARIMA_COVID
+GOOG_ARIMA_COVID
+GM_ARIMA_COVID
+BTC_ARIMA_COVID
+```
+```{r}
+#The best fit ARIMA models are:
+#-WMT: ARIMA(0,1,0)
+#-GOOG: ARIMA(0,1,1)
+#-GM: ARIMA(0,1,0)
+#-BTC: ARIMA(0,1,0); Same as general motors.
+```
+
+```{r}
+#Forecasting for the next month after the end of the COVID-19 pandemic for Walmart closing price
+
+fc1 <- WMT_ARIMA_COVID |>
+        forecast(h=30)
+
+fc1 |>
+  autoplot(WMT_COVID)
+
+fabletools::accuracy(fc1,WMT_COVID)
+```
