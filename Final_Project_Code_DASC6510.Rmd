@@ -2,8 +2,16 @@
 title: "Final Project DASC 6510"
 author: "Kaleb Williams, Caleb Vonmaydell"
 date: "Fall 2023"
-output: html_document
+output: html_document:
+  keep_md: yes
 ---
+
+```{r setup-chunk, include=FALSE}
+knitr::opts_chunk$set(dev = "png",
+                      dpi = 300,
+                      echo = FALSE,
+                      cache = TRUE)
+```
 
 ```{r,warning=FALSE,message='FALSE'}
 #Importing possible necessary libraries
@@ -15,9 +23,9 @@ library(fable.prophet)
 ```
 
 ```{r}
-#Getting Walmart (WMT) stock data from 2009-01-01 to 2023-10-31
+#Getting Walmart (WMT) stock data from 2008-08-19 to 2023-10-31 as this is the first occurrence of google stock on yahoo finance
 
-start.date = '2009-01-01'
+start.date = '2004-08-19'
 end.date = '2023-10-31'
 
 getSymbols("WMT",src="yahoo",from=start.date, to=end.date)
@@ -39,31 +47,7 @@ WMT_price <- WMT_price |>
 ```
 
 ```{r}
-#Getting Bitcoin (BTC-USD) price data from 2009-01-01 to 2023-10-31
-
-start.date = '2009-01-01'
-end.date = '2023-10-31'
-
-getSymbols("BTC-USD",src="yahoo",from=start.date, to=end.date)
-```
-```{r}
-BTC_price = zoo::fortify.zoo(`BTC-USD`)
-
-#Rename date variable
-BTC_price <- BTC_price |>
-  rename(c("Date" = "Index", "Close" = "BTC-USD.Close"))
-
-#Create tissble object
-BTC_price <- as_tsibble(BTC_price, index = Date) # create tsibble object
-
-#Re-index based on trading days due to the missing days in stock data
-BTC_price <- BTC_price |>
-  mutate(day = row_number()) |>
-  update_tsibble(index = day, regular = TRUE)
-```
-
-```{r}
-#Getting Google stock data from 2009-01-01 to 2023-10-31
+#Getting Google stock data from 2000-01-01 to 2023-10-31
 
 getSymbols("GOOG",src="yahoo",from=start.date, to=end.date)
 ```
@@ -85,7 +69,10 @@ GOOG_price <- GOOG_price |>
 
 
 ```{r}
-#Getting General Motors (GM) stock data from 2009-01-01 to 2023-10-31
+#Getting General Motors (GM) stock data from 2000-01-01 to 2023-10-31
+
+start.date = '2010-11-18'
+end.date = '2023-10-31'
 
 getSymbols("GM",src="yahoo",from=start.date, to=end.date)
 ```
@@ -105,33 +92,28 @@ GM_price <- GM_price |>
   mutate(day = row_number()) |>
     update_tsibble(index = day, regular = TRUE)
 ```
-
 ```{r}
-#Plotting all closing price data for WMT, GOOG, GM and BTC
+#Getting Bitcoin (BTC-USD) price data from 2012-01-01 to 2023-10-31
 
-WMT_price |>
-  autoplot(Close) + labs(
-    y = "Walmart (WMT) Daily Closing Price ($)",
-    x = "Days"
-  )
+start.date = '2012-01-01'
+end.date = '2023-10-31'
 
-GOOG_price |>
-  autoplot(Close) + labs (
-    y = "Google (GOOG) Daily Closing Price ($)",
-    x = "Days"
-  )
+getSymbols("BTC-USD",src="yahoo",from=start.date, to=end.date)
+```
+```{r}
+BTC_price = zoo::fortify.zoo(`BTC-USD`)
 
-GM_price |>
-  autoplot(Close) + labs(
-    y = "General Motors (GM) Daily Closing Price ($)",
-    x = "Days"
-  )
+#Rename date variable
+BTC_price <- BTC_price |>
+  rename(c("Date" = "Index", "Close" = "BTC-USD.Close"))
 
-BTC_price|>
-  autoplot(Close) + labs (
-    y = "Bitcoin (BTC-USD) Daily Closing Price ($)",
-    x = "Days"
-  )
+#Create tissble object
+BTC_price <- as_tsibble(BTC_price, index = Date) # create tsibble object
+
+#Re-index based on trading days due to the missing days in stock data
+BTC_price <- BTC_price |>
+  mutate(day = row_number()) |>
+  update_tsibble(index = day, regular = TRUE)
 ```
 
 We will use the following volatility measure for all stock and bitcoin prices
@@ -141,10 +123,10 @@ We will use the following volatility measure for all stock and bitcoin prices
 \end{align}
 
 ```{r}
-#Volatility function as defined above.
+#Volatility function using logged closing prices
 
 vol <- function(x){
-  v=abs(sqrt(x)-sqrt(mean(x)))
+  v=abs(sqrt(log(x))-sqrt(mean(log(x))))
   return(v)
 }
 ```
@@ -196,7 +178,7 @@ legend_colours = c('Walmart' = 'black','Google'='blue','General Motors'='red','B
 ggplot() + 
   geom_line(data = WMT_vol, aes(x=Date, y=Volatility,colour = 'Walmart')) + 
   geom_line(data = GOOG_vol, aes(x=Date, y=Volatility,colour = 'Google')) +       geom_line(data=GM_vol, aes(x=Date,y=Volatility,colour='General Motors')) +
-  geom_line(data=BTC_vol, aes(x=Date,y=Volatility/10,colour='Bitcoin')) +
+  geom_line(data=BTC_vol, aes(x=Date,y=Volatility,colour='Bitcoin')) +
   labs(
     y = 'Volatility of Closing Price ($)',
     x = 'Date',
@@ -204,8 +186,6 @@ ggplot() +
     ) +
   scale_color_manual(values = legend_colours) +
   theme_bw()
-
-#Transformation of the volatility closing price for bitcoin was applied so that all stocks and bitcoin were on th same scale, as price of bitcoin is orders of magnitude larger than the closing stock prices. Transformation applied was Volatility = Volatility.
 ```
 ```{r}
 #From the above plot we can see an overall climb in closing prices
@@ -221,30 +201,30 @@ ggplot() +
 #Filtering closing price by COVID-19 pandemic dates
 
 WMT_COVID <- WMT_price |>
-  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+  filter(Date >= '2020-02-15', Date <= '2023-05-31')
 
 GOOG_COVID <- GOOG_price |>
-  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+  filter(Date >= '2020-02-15', Date <= '2023-05-31')
 
 GM_COVID <- GM_price |>
-  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+  filter(Date >= '2020-02-15', Date <= '2023-05-31')
 
 BTC_COVID <- BTC_price |>
-  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+  filter(Date >= '2020-02-15', Date <= '2023-05-31')
 
 #Filtering volatility of closing price by COVID-19 pandemic dates
 
 WMT_COVID_VOL <- WMT_vol |>
-  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+  filter(Date >= '2020-02-15', Date <= '2023-05-31')
 
 GOOG_COVID_VOL<- GOOG_vol |>
-  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+  filter(Date >= '2020-02-15', Date <= '2023-05-31')
 
 GM_COVID_VOL <- GM_vol |>
-  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+  filter(Date >= '2020-02-15', Date <= '2023-05-31')
 
 BTC_COVID_VOL <- BTC_vol |>
-  filter(Date >= '2020-01-01', Date <= '2023-05-31')
+  filter(Date >= '2020-02-15', Date <= '2023-05-31')
 ```
 
 ```{r}
@@ -279,7 +259,7 @@ legend_colours = c('Walmart' = 'black','Google'='blue','General Motors'='red','B
 ggplot() + 
   geom_line(data = WMT_COVID_VOL, aes(x=Date, y=Volatility,colour = 'Walmart')) + 
   geom_line(data = GOOG_COVID_VOL, aes(x=Date, y=Volatility,colour = 'Google')) +       geom_line(data=GM_COVID_VOL, aes(x=Date,y=Volatility,colour='General Motors')) +
-  geom_line(data=BTC_COVID_VOL, aes(x=Date,y=Volatility/10,colour='Bitcoin')) +
+  geom_line(data=BTC_COVID_VOL, aes(x=Date,y=Volatility,colour='Bitcoin')) +
   labs(
     y = 'Stock Closing Price Volatility ($) During COVID-19',
     x = 'Date',
@@ -287,8 +267,6 @@ ggplot() +
     ) +
   scale_color_manual(values = legend_colours) +
   theme_bw()
-
-#Transformation of the volatility of the closing price for bitcoin was applied so that all stocks and bitcoin were on th same scale, as price of bitcoin is orders of magnitude larger than the closing stock prices. Transformation applied was Volatility = Volatility/10.
 ```
 ```{r}
 #Large spikes in the volatility between 2021 and mid 2022 as seen on the closing price graph.
@@ -314,20 +292,72 @@ BTC_ARIMA_COVID
 ```
 ```{r}
 #The best fit ARIMA models are:
-#-WMT: ARIMA(0,1,0)
+#-WMT: ARIMA(2,1,2)
 #-GOOG: ARIMA(0,1,1)
 #-GM: ARIMA(0,1,0)
 #-BTC: ARIMA(0,1,0); Same as general motors.
 ```
 
 ```{r}
-#Forecasting for the next month after the end of the COVID-19 pandemic for Walmart closing price
+#Investigating the housing market collapse of 2008 for the closing price of WMT, GOOG and GM.
 
-fc1 <- WMT_ARIMA_COVID |>
-        forecast(h=30)
+#Creating tsibbles for closing price of stock during housing market collapse og 2008
 
-fc1 |>
-  autoplot(WMT_COVID)
+WMT_house <- WMT_price |>
+  filter(Date >= '2007-01-01', Date <= '2014-12-31')
 
-fabletools::accuracy(fc1,WMT_COVID)
+GOOG_house <- GOOG_price |>
+  filter(Date >= '2007-01-01', Date <= '2014-12-31')
+
+GM_house <- GM_price |>
+  filter(Date >= '2007-01-01', Date <= '2014-12-31')
+
+#Creating tsibbles for volatility in closing price of stocks during housing market collapse of 2008 until end of 2014
+
+WMT_house_vol <- WMT_vol |>
+  filter(Date >= '2007-01-01', Date <= '2014-12-31')
+
+GOOG_house_vol <- GOOG_vol |>
+  filter(Date >= '2007-01-01',Date <='2014-12-31')
+
+GM_house_vol <- GM_vol |>
+  filter(Date >= '2007-01-01',Date <='2014-12-31')
+```
+
+```{r}
+#Plots of WMT and GOOG closing price during 2008 housing crisis until the end of 2014
+
+legend_colours = c('Walmart' = 'black','Google'='blue')
+
+ggplot() + 
+  geom_line(data = WMT_house, aes(x=Date, y=Close,colour = 'Walmart')) + 
+  geom_line(data = GOOG_house, aes(x=Date, y=Close,colour = 'Google')) +  
+  labs(
+    y = 'Stock Closing Price ($) During 2008 Housing Crisis',
+    x = 'Date',
+    colour = 'Stocks'
+    ) +
+  scale_color_manual(values = legend_colours) +
+  theme_bw()
+```
+```{r}
+#Plots of stocks closing price volatility during 2008 (beginning 0f 2007) housing crisis up till current date.
+
+legend_colours = c('Walmart' = 'black','Google'='blue')
+
+ggplot() + 
+  geom_line(data = WMT_house_vol, aes(x=Date, y=Volatility,colour = 'Walmart')) + 
+  geom_line(data = GOOG_house_vol, aes(x=Date, y=Volatility,colour = 'Google'))+
+  labs(
+    y = 'Stock Closing Price Volatility ($) During 2008 Housing Crisis',
+    x = 'Date',
+    colour = 'Stocks'
+    ) +
+  scale_color_manual(values = legend_colours) +
+  theme_bw()
+```
+
+```{r}
+#Both GOOG and WMT exhibit higher volatility during the 2008 housing market collapse that begins to taper off as we approach the end of 2014 with next to no volatility in the stock price. With GOOG exhibiting much higher volatility throughout.
+
 ```
