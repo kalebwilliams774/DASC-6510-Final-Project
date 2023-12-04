@@ -38,7 +38,7 @@ WMT_price <- WMT_stock |>
   rename(c("Date" = "Index", "Close" = "WMT.Close"))
 
 #Create tissble object
-WMT_price <- as_tsibble(WMT_price, index = Date) # create tsibble object
+WMT_price <- as_tsibble(WMT_price, index = Date) 
 
 #Re-index based on trading days due to the missing days in stock data
 WMT_price <- WMT_price |>
@@ -269,7 +269,7 @@ ggplot() +
   theme_bw()
 ```
 ```{r}
-#Now to forecast the data using exponential smoothing from fpp3 package. We will forecast for the next year and compare to the true volatility for each stock.
+#Now to forecast the data using exponential smoothing ETS function from fpp3 package. We will forecast for the next year and compare to the true volatility for each stock.
 
 fit_exp_WMT <- WMT_COVID_VOL |>
   model(
